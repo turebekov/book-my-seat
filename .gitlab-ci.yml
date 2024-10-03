@@ -1,0 +1,41 @@
+stages:
+  - build-test
+  - deploy-to-test 
+  - build-prod
+  - deploy-to-prod 
+
+build-test:
+  only:
+    - dev 
+  image: docker:latest
+  stage: build-test
+  script:
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+    - docker build --tag $CI_REGISTRY_IMAGE:latest -f Dockerfile.dev .
+    - echo $CI_REGISTRY_IMAGE
+    - docker push $CI_REGISTRY_IMAGE:latest
+  tags:
+    - docker
+
+deploy-to-test:
+  only:
+    - dev 
+  image: docker/compose:latest
+  stage: deploy-to-test
+  variables:
+    DOCKER_TLS_VERIFY: 1
+    DOCKER_CERT_PATH: "/certs"
+    PROJECT_NAME: "bookroom"
+    DOCKER_HOST: "tcp://172.16.10.55:2376"
+  script:
+    - mkdir -p $DOCKER_CERT_PATH
+    - echo "$TEST_TLSCACERT" > $DOCKER_CERT_PATH/ca.pem
+    - echo "$TEST_TLSCERT" > $DOCKER_CERT_PATH/cert.pem
+    - echo "$TEST_TLSKEY" > $DOCKER_CERT_PATH/key.pem
+    # docker-swarm
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+    - echo $PROJECT_NAME
+    - docker stack deploy -c docker-compose.yml $PROJECT_NAME --with-registry-auth 
+    - rm -rf $DOCKER_CERT_PATH
+  tags:
+    - docker
